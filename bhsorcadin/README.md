@@ -8,6 +8,6 @@ Important source files:
   passive effects, and BG2EE proficiency text repair.
 - `lib/fl#add_kit_ee.tpa`: public-domain EE `ADD_KIT` helper by Wisp and
   Argent77.
-- `tools/extend_magic_missile.py`: rebuilds the custom Magic Missile innate
-  spell during install.
-
+- `spells/`: prebuilt custom Magic Missile SPL resources used during install.
+- `tools/extend_magic_missile.py`: developer utility for regenerating the
+  custom Magic Missile resources.

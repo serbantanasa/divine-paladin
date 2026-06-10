@@ -52,7 +52,6 @@ COPY_EXISTING ~CLABPA02.2da~ ~override/BHSORC.2da~
 // Arcane powers are installed as innate copies so CLAB grants appear on
 // the special abilities bar even though they use wizard spell effects.
 ACTION_DEFINE_ASSOCIATIVE_ARRAY bhs_arcane_innates BEGIN
-  SPWI112 => BHSWI112
   SPWI114 => BHSWI114
   SPWI212 => BHSWI212
   SPWI305 => BHSWI305
@@ -91,14 +90,11 @@ ACTION_PHP_EACH bhs_arcane_innates AS source => innate BEGIN
   BUT_ONLY
 END
 
-ACTION_FOR_EACH bhs_mm_helper IN BHSMM1 BHSMM2 BHSMM3 BHSMM4 BHSMM5 BEGIN
-  COPY_EXISTING ~SPWI112.SPL~ ~override/%bhs_mm_helper%.SPL~
-    WRITE_SHORT 0x1c 4
-    WRITE_LONG 0x34 0
-  BUT_ONLY
+// Magic Missile is a custom prebuilt innate wrapper. It continues scaling past
+// the stock spell's five-missile cap by dispatching to these helper spells.
+ACTION_FOR_EACH bhs_mm_spell IN BHSWI112 BHSMM1 BHSMM2 BHSMM3 BHSMM4 BHSMM5 BEGIN
+  COPY ~bhsorcadin/spells/%bhs_mm_spell%.SPL~ ~override/%bhs_mm_spell%.SPL~
 END
-
-AT_NOW ~python3 bhsorcadin/tools/extend_magic_missile.py override~
 
 // Hidden passive Use Any Item grant. This is the reliable EE-safe way to let a
 // Paladin kit use arcane scrolls and wands without editing every item.

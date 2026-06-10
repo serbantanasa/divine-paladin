@@ -15,7 +15,6 @@ name is `Divine Paladin`.
 
 - BGEE, BG2EE, or EET
 - WeiDU
-- Python 3, used during install to generate the scaling Magic Missile spell
 
 ## Install
 
@@ -63,6 +62,9 @@ Create a new character and choose `Paladin`. The kit should appear as
 
 ## Notes
 
-This mod is source-only. Do not commit WeiDU-generated `backup` folders,
-`SETUP-*.DEBUG`, `WeiDU.log`, `override`, or game data files.
+The scaling Magic Missile resources are included as prebuilt SPL files, so
+Python is not required for normal installation. The Python script in `tools/`
+is kept only as a developer utility for regenerating those SPL files.
 
+Do not commit WeiDU-generated `backup` folders, `SETUP-*.DEBUG`, `WeiDU.log`,
+`override`, or game data files.
