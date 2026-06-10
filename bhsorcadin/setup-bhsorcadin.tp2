@@ -1,0 +1,304 @@
+BACKUP ~bhsorcadin/backup~
+AUTHOR ~local custom kit~
+VERSION ~0.1~
+
+BEGIN ~Divine Paladin kit~
+
+REQUIRE_PREDICATE GAME_IS ~bgee bg2ee eet~ ~This kit is intended for BGEE, BG2EE, or EET.~
+REQUIRE_PREDICATE FILE_EXISTS_IN_GAME ~CLABPA02.2da~ ~Cavalier CLAB table not found.~
+REQUIRE_PREDICATE FILE_EXISTS_IN_GAME ~CLABPA03.2da~ ~Inquisitor CLAB table not found.~
+REQUIRE_PREDICATE FILE_EXISTS_IN_GAME ~SPCL233B.SPL~ ~Inquisitor immunity resource not found.~
+REQUIRE_PREDICATE FILE_EXISTS_IN_GAME ~SPCL241.SPL~ ~Undead Hunter undead bonus resource not found.~
+REQUIRE_PREDICATE FILE_EXISTS_IN_GAME ~SPCL242.SPL~ ~Undead Hunter immunity resource not found.~
+REQUIRE_PREDICATE FILE_EXISTS ~bhsorcadin/lib/fl#add_kit_ee.tpa~ ~Missing bhsorcadin/lib/fl#add_kit_ee.tpa.~
+
+INCLUDE ~bhsorcadin/lib/fl#add_kit_ee.tpa~
+
+OUTER_SPRINT bhs_kit ~BHSORC~
+OUTER_SET bhs_max_level = 50
+ACTION_IF GAME_IS ~bg2ee~ BEGIN
+  OUTER_SET bhs_max_level = 40
+END
+
+DEFINE_ACTION_FUNCTION BHS_ADD_PERIODIC_CLAB_ROW
+INT_VAR
+  start = 1
+  interval = 1
+  stop = 0
+STR_VAR
+  label = ~~
+  spell = ~~
+BEGIN
+  OUTER_SPRINT row ~%label%~
+  ACTION_IF (stop = 0) BEGIN
+    OUTER_SET stop = bhs_max_level
+  END
+  OUTER_FOR (level = start; level <= stop; level += interval) BEGIN
+    OUTER_SET $bhs_grant(~%label%_%level%~) = 1
+  END
+  OUTER_FOR (level = 1; level <= bhs_max_level; level += 1) BEGIN
+    ACTION_IF VARIABLE_IS_SET $bhs_grant(~%label%_%level%~) BEGIN
+      OUTER_SPRINT row ~%row% %spell%~
+    END ELSE BEGIN
+      OUTER_SPRINT row ~%row% ****~
+    END
+  END
+  APPEND_OUTER ~override/BHSORC.2da~ ~%row%~
+END
+
+COPY_EXISTING ~CLABPA02.2da~ ~override/BHSORC.2da~
+  PRETTY_PRINT_2DA
+
+// Arcane powers are installed as innate copies so CLAB grants appear on
+// the special abilities bar even though they use wizard spell effects.
+ACTION_DEFINE_ASSOCIATIVE_ARRAY bhs_arcane_innates BEGIN
+  SPWI112 => BHSWI112
+  SPWI114 => BHSWI114
+  SPWI212 => BHSWI212
+  SPWI305 => BHSWI305
+  SPWI304 => BHSWI304
+  SPWI313 => BHSWI313
+  SPWI408 => BHSWI408
+  SPWI513 => BHSWI513
+  SPWI514 => BHSWI514
+  SPWI613 => BHSWI613
+  SPWI611 => BHSWI611
+  SPWI615 => BHSWI615
+  SPWI703 => BHSWI703
+  SPWI710 => BHSWI710
+  SPWI716 => BHSWI716
+  SPWI805 => BHSWI805
+  SPWI812 => BHSWI812
+  SPWI809 => BHSWI809
+  SPWI903 => BHSWI903
+  SPWI909 => BHSWI909
+  SPWI919 => BHSWI919
+  SPWI920 => BHSWI920
+  SPWI907 => BHSWI907
+  SPWI915 => BHSWI915
+  SPWI925 => BHSWI925
+END
+
+ACTION_PHP_EACH bhs_arcane_innates AS source => innate BEGIN
+  COPY_EXISTING ~%source%.SPL~ ~override/%innate%.SPL~
+    WRITE_SHORT 0x1c 4
+    WRITE_LONG 0x34 0
+    READ_LONG 0x64 bhs_ext_off
+    READ_SHORT 0x68 bhs_ext_count
+    FOR (bhs_i = 0; bhs_i < bhs_ext_count; ++bhs_i) BEGIN
+      WRITE_SHORT (bhs_ext_off + (bhs_i * 0x28) + 0x02) 4
+    END
+  BUT_ONLY
+END
+
+ACTION_FOR_EACH bhs_mm_helper IN BHSMM1 BHSMM2 BHSMM3 BHSMM4 BHSMM5 BEGIN
+  COPY_EXISTING ~SPWI112.SPL~ ~override/%bhs_mm_helper%.SPL~
+    WRITE_SHORT 0x1c 4
+    WRITE_LONG 0x34 0
+  BUT_ONLY
+END
+
+AT_NOW ~python3 bhsorcadin/tools/extend_magic_missile.py override~
+
+// Hidden passive Use Any Item grant. This is the reliable EE-safe way to let a
+// Paladin kit use arcane scrolls and wands without editing every item.
+COPY_EXISTING ~SPCL242.SPL~ ~override/BHSUAI.SPL~
+  WRITE_SHORT 0x1c 4
+  WRITE_LONG 0x34 1
+  READ_LONG 0x64 bhs_uai_ext_off
+  READ_SHORT 0x68 bhs_uai_ext_count
+  FOR (bhs_i = 0; bhs_i < bhs_uai_ext_count; ++bhs_i) BEGIN
+    WRITE_SHORT (bhs_uai_ext_off + (bhs_i * 0x28) + 0x02) 4
+  END
+  LPF DELETE_EFFECT INT_VAR check_globals = 0 END
+  LPF ADD_SPELL_EFFECT INT_VAR opcode = 302 target = 1 parameter2 = 1 timing = 9 resist_dispel = 2 END
+  LPF ADD_SPELL_EFFECT INT_VAR opcode = 215 target = 1 timing = 1 STR_VAR resource = ~SPUSEANY~ END
+  SAY NAME1 ~Use Any Item~
+BUT_ONLY
+
+// Hidden passive turning bonus. Paladins normally turn at class level -2; a
+// cumulative +4 bonus makes Divine Paladins turn at class level +2.
+COPY_EXISTING ~SPCL242.SPL~ ~override/BHSUTRN.SPL~
+  WRITE_SHORT 0x1c 4
+  WRITE_LONG 0x34 1
+  READ_LONG 0x64 bhs_turn_ext_off
+  READ_SHORT 0x68 bhs_turn_ext_count
+  FOR (bhs_i = 0; bhs_i < bhs_turn_ext_count; ++bhs_i) BEGIN
+    WRITE_SHORT (bhs_turn_ext_off + (bhs_i * 0x28) + 0x02) 4
+  END
+  LPF DELETE_EFFECT INT_VAR check_globals = 0 END
+  LPF ADD_SPELL_EFFECT INT_VAR opcode = 323 target = 1 parameter1 = 4 parameter2 = 0 timing = 9 resist_dispel = 2 probability1 = 100 probability2 = 0 END
+  SAY NAME1 ~Improved Turning~
+  READ_LONG 0x08 bhs_turn_msg
+  LPF ADD_SPELL_EFFECT INT_VAR opcode = 139 target = 1 parameter1 = bhs_turn_msg parameter2 = 0 timing = 1 resist_dispel = 3 probability1 = 100 probability2 = 0 END
+BUT_ONLY
+
+// Inquisitor benefits only: immunity package, Dispel Magic, and True Sight.
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 99 stop = 1 STR_VAR label = ~BHSINQIM~ spell = ~AP_SPCL233B~ END
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 4 STR_VAR label = ~BHSDISP1~ spell = ~GA_SPCL231~ END
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 99 stop = 1 STR_VAR label = ~BHSDISP2~ spell = ~GA_SPCL231~ END
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 4 STR_VAR label = ~BHSTRUE1~ spell = ~GA_SPCL232~ END
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 99 stop = 1 STR_VAR label = ~BHSTRUE2~ spell = ~GA_SPCL232~ END
+
+// Undead Hunter benefits only: +3/+3 vs undead and immunity to hold/level drain.
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 99 stop = 1 STR_VAR label = ~BHSUHIT~ spell = ~AP_SPCL241~ END
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 99 stop = 1 STR_VAR label = ~BHSUIMM~ spell = ~AP_SPCL242~ END
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 99 stop = 1 STR_VAR label = ~BHSUAI~ spell = ~AP_BHSUAI~ END
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 99 stop = 1 STR_VAR label = ~BHSUTRN~ spell = ~AP_BHSUTRN~ END
+
+// First-pass sorcerer-style innate spell ladder. These are easy to tune later.
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 1 STR_VAR label = ~BHSARC01~ spell = ~GA_BHSWI112~ END // Magic Missile
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 1 interval = 4 STR_VAR label = ~BHSARC02~ spell = ~GA_BHSWI114~ END // Shield
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 2 interval = 2 STR_VAR label = ~BHSARC03~ spell = ~GA_BHSWI212~ END // Mirror Image
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 3 interval = 3 STR_VAR label = ~BHSARC04~ spell = ~GA_BHSWI305~ END // Haste
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 3 interval = 2 STR_VAR label = ~BHSARC05~ spell = ~GA_BHSWI304~ END // Fireball
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 4 interval = 3 STR_VAR label = ~BHSARC06~ spell = ~GA_BHSWI313~ END // Skull Trap
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 5 interval = 3 STR_VAR label = ~BHSARC07~ spell = ~GA_BHSWI408~ END // Stoneskin
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 6 interval = 3 STR_VAR label = ~BHSARC08~ spell = ~GA_BHSWI513~ END // Breach
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 7 interval = 3 STR_VAR label = ~BHSARC09~ spell = ~GA_BHSWI514~ END // Lower Resistance
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 8 interval = 4 STR_VAR label = ~BHSARC10~ spell = ~GA_BHSWI613~ END // Improved Haste
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 9 interval = 4 STR_VAR label = ~BHSARC11~ spell = ~GA_BHSWI611~ END // Protection From Magic Weapons
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 10 interval = 4 STR_VAR label = ~BHSARC12~ spell = ~GA_BHSWI615~ END // Chain Lightning
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 11 interval = 5 STR_VAR label = ~BHSARC13~ spell = ~GA_BHSWI703~ END // Project Image
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 12 interval = 5 STR_VAR label = ~BHSARC14~ spell = ~GA_BHSWI710~ END // Spell Sequencer
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 13 interval = 5 STR_VAR label = ~BHSARC15~ spell = ~GA_BHSWI716~ END // Mordenkainen's Sword
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 14 interval = 5 STR_VAR label = ~BHSARC16~ spell = ~GA_BHSWI805~ END // Pierce Shield
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 15 interval = 5 STR_VAR label = ~BHSARC17~ spell = ~GA_BHSWI812~ END // Abi-Dalzim's Horrid Wilting
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 16 interval = 5 STR_VAR label = ~BHSARC18~ spell = ~GA_BHSWI809~ END // Spell Trigger
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 18 interval = 4 STR_VAR label = ~BHSARC25~ spell = ~GA_BHSWI903~ END // Spellstrike
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 18 interval = 6 STR_VAR label = ~BHSARC19~ spell = ~GA_BHSWI909~ END // Time Stop
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 20 interval = 6 STR_VAR label = ~BHSARC20~ spell = ~GA_BHSWI919~ END // Wish
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 22 interval = 5 STR_VAR label = ~BHSARC21~ spell = ~GA_BHSWI920~ END // Energy Blades
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 24 interval = 5 STR_VAR label = ~BHSARC22~ spell = ~GA_BHSWI907~ END // Absolute Immunity
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 26 interval = 5 STR_VAR label = ~BHSARC23~ spell = ~GA_BHSWI915~ END // Black Blade of Disaster
+LAF BHS_ADD_PERIODIC_CLAB_ROW INT_VAR start = 28 interval = 5 STR_VAR label = ~BHSARC24~ spell = ~GA_BHSWI925~ END // Comet
+
+ADD_KIT ~BHSORC~
+  ~BHSORC 1 1 1 1 1 1 1 1~
+  ~BHSORC 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5~
+  ~BHSORC 18 0 18 0 13 17~
+  ~BHSORC 0 0 0 0 0 0~
+  ~BHSORC 18 0 18 0 0 17~
+  ~BHSORC 18 0 18 0 0 17~
+  ~BHSORC 1 0 0 0 0 0 0 0 0~
+  ~BHSORC 0 0 0 0 0 0~
+  ~override/BHSORC.2da~
+  ~K_P_H K_P_D K_P_G K_P_E K_P_HE K_P_HL K_P_HO~
+  ~0x00004000 6~
+  ~Pa0~
+  ~* * * * * * * * * * * * * * * * * * * *~
+  SAY ~divine paladin~
+  SAY ~Divine Paladin~
+  SAY ~DIVINE PALADIN: This paladin's divine calling is fused with the blood of Bhaal, awakening spontaneous arcane power as experience grows.
+
+Requirements:
+- Alignment: Lawful Good.
+- Minimum abilities: Strength 18, Constitution 18, Wisdom 13, Charisma 17.
+
+Advantages:
+- Counts as a Paladin for class checks and quests.
+- Uses normal Paladin THAC0, saving throw, and level progression.
+- Gains Cavalier benefits without Cavalier missile weapon restrictions: +3 to hit and damage against draconic and demonic creatures, immunity to fear and poison, fire and acid resistance, and Remove Fear.
+- Gains Inquisitor benefits without Inquisitor restrictions: immunity to charm and hold, Dispel Magic, and True Sight.
+- Gains Undead Hunter benefits without Undead Hunter restrictions: +3 to hit and damage against undead, immunity to hold, and immunity to level drain.
+- Turns undead four levels stronger than a normal Paladin, for an effective turning level of class level +2.
+- May place up to five proficiency points in every weapon and fighting style.
+- May wear armor and use normal paladin equipment.
+- May use any item via a hidden Use Any Item effect, including arcane scrolls and wands.
+- Gains escalating sorcerer-style arcane spells as innate abilities.
+- Bhaalspawn Magic Missile keeps scaling after the normal level 9 cap, adding one missile every two caster levels up to 25 missiles at level 49.
+
+Innate spell grant ladder:
+Each listed spell is one additional innate use per day. Repeated names stack. BG2EE uses the level 1-40 portion; BGEE/EET installs continue the table through level 50.
+
+Level 1: Dispel Magic x2, True Sight x2, Magic Missile, Shield.
+Level 2: Magic Missile, Mirror Image.
+Level 3: Magic Missile, Haste, Fireball.
+Level 4: Magic Missile, Mirror Image, Skull Trap.
+Level 5: Dispel Magic, True Sight, Magic Missile, Shield, Fireball, Stoneskin.
+Level 6: Magic Missile, Mirror Image, Haste, Breach.
+Level 7: Magic Missile, Fireball, Skull Trap, Lower Resistance.
+Level 8: Magic Missile, Mirror Image, Stoneskin, Improved Haste.
+Level 9: Dispel Magic, True Sight, Magic Missile, Shield, Haste, Fireball, Breach, Protection From Magic Weapons.
+Level 10: Magic Missile, Mirror Image, Skull Trap, Lower Resistance, Chain Lightning.
+Level 11: Magic Missile, Fireball, Stoneskin, Project Image.
+Level 12: Magic Missile, Mirror Image, Haste, Breach, Improved Haste, Spell Sequencer.
+Level 13: Dispel Magic, True Sight, Magic Missile, Shield, Fireball, Skull Trap, Lower Resistance, Protection From Magic Weapons, Mordenkainen's Sword.
+Level 14: Magic Missile, Mirror Image, Stoneskin, Chain Lightning, Pierce Shield.
+Level 15: Magic Missile, Haste, Fireball, Breach, Abi-Dalzim's Horrid Wilting.
+Level 16: Magic Missile, Mirror Image, Skull Trap, Lower Resistance, Improved Haste, Project Image, Spell Trigger.
+Level 17: Dispel Magic, True Sight, Magic Missile, Shield, Fireball, Stoneskin, Protection From Magic Weapons, Spell Sequencer.
+Level 18: Magic Missile, Mirror Image, Haste, Breach, Chain Lightning, Mordenkainen's Sword, Spellstrike, Time Stop.
+Level 19: Magic Missile, Fireball, Skull Trap, Lower Resistance, Pierce Shield.
+Level 20: Magic Missile, Mirror Image, Stoneskin, Improved Haste, Abi-Dalzim's Horrid Wilting, Wish.
+Level 21: Dispel Magic, True Sight, Magic Missile, Shield, Haste, Fireball, Breach, Protection From Magic Weapons, Project Image, Spell Trigger.
+Level 22: Magic Missile, Mirror Image, Skull Trap, Lower Resistance, Chain Lightning, Spell Sequencer, Spellstrike, Energy Blades.
+Level 23: Magic Missile, Fireball, Stoneskin, Mordenkainen's Sword.
+Level 24: Magic Missile, Mirror Image, Haste, Breach, Improved Haste, Pierce Shield, Time Stop, Absolute Immunity.
+Level 25: Dispel Magic, True Sight, Magic Missile, Shield, Fireball, Skull Trap, Lower Resistance, Protection From Magic Weapons, Abi-Dalzim's Horrid Wilting.
+Level 26: Magic Missile, Mirror Image, Stoneskin, Chain Lightning, Project Image, Spell Trigger, Spellstrike, Wish, Black Blade of Disaster.
+Level 27: Magic Missile, Haste, Fireball, Breach, Spell Sequencer, Energy Blades.
+Level 28: Magic Missile, Mirror Image, Skull Trap, Lower Resistance, Improved Haste, Mordenkainen's Sword, Comet.
+Level 29: Dispel Magic, True Sight, Magic Missile, Shield, Fireball, Stoneskin, Protection From Magic Weapons, Pierce Shield, Absolute Immunity.
+Level 30: Magic Missile, Mirror Image, Haste, Breach, Chain Lightning, Abi-Dalzim's Horrid Wilting, Spellstrike, Time Stop.
+Level 31: Magic Missile, Fireball, Skull Trap, Lower Resistance, Project Image, Spell Trigger, Black Blade of Disaster.
+Level 32: Magic Missile, Mirror Image, Stoneskin, Improved Haste, Spell Sequencer, Wish, Energy Blades.
+Level 33: Dispel Magic, True Sight, Magic Missile, Shield, Haste, Fireball, Breach, Protection From Magic Weapons, Mordenkainen's Sword, Comet.
+Level 34: Magic Missile, Mirror Image, Skull Trap, Lower Resistance, Chain Lightning, Pierce Shield, Spellstrike, Absolute Immunity.
+Level 35: Magic Missile, Fireball, Stoneskin, Abi-Dalzim's Horrid Wilting.
+Level 36: Magic Missile, Mirror Image, Haste, Breach, Improved Haste, Project Image, Spell Trigger, Time Stop, Black Blade of Disaster.
+Level 37: Dispel Magic, True Sight, Magic Missile, Shield, Fireball, Skull Trap, Lower Resistance, Protection From Magic Weapons, Spell Sequencer, Energy Blades.
+Level 38: Magic Missile, Mirror Image, Stoneskin, Chain Lightning, Mordenkainen's Sword, Spellstrike, Wish, Comet.
+Level 39: Magic Missile, Haste, Fireball, Breach, Pierce Shield, Absolute Immunity.
+Level 40: Magic Missile, Mirror Image, Skull Trap, Lower Resistance, Improved Haste, Abi-Dalzim's Horrid Wilting.
+Level 41: Dispel Magic, True Sight, Magic Missile, Shield, Fireball, Stoneskin, Protection From Magic Weapons, Project Image, Spell Trigger, Black Blade of Disaster.
+Level 42: Magic Missile, Mirror Image, Haste, Breach, Chain Lightning, Spell Sequencer, Spellstrike, Time Stop, Energy Blades.
+Level 43: Magic Missile, Fireball, Skull Trap, Lower Resistance, Mordenkainen's Sword, Comet.
+Level 44: Magic Missile, Mirror Image, Stoneskin, Improved Haste, Pierce Shield, Wish, Absolute Immunity.
+Level 45: Dispel Magic, True Sight, Magic Missile, Shield, Haste, Fireball, Breach, Protection From Magic Weapons, Abi-Dalzim's Horrid Wilting.
+Level 46: Magic Missile, Mirror Image, Skull Trap, Lower Resistance, Chain Lightning, Project Image, Spell Trigger, Spellstrike, Black Blade of Disaster.
+Level 47: Magic Missile, Fireball, Stoneskin, Spell Sequencer, Energy Blades.
+Level 48: Magic Missile, Mirror Image, Haste, Breach, Improved Haste, Mordenkainen's Sword, Time Stop, Comet.
+Level 49: Dispel Magic, True Sight, Magic Missile, Shield, Fireball, Skull Trap, Lower Resistance, Protection From Magic Weapons, Pierce Shield, Absolute Immunity.
+Level 50: Magic Missile, Mirror Image, Stoneskin, Chain Lightning, Abi-Dalzim's Horrid Wilting, Spellstrike, Wish.
+
+Disadvantages:
+- None.~
+
+LAF fl#add_kit_ee
+  STR_VAR
+    kit_name = ~BHSORC~
+    numwslot = ~12~
+END
+
+// BG2EE uses different proficiency name/description strrefs than BGEE.
+// Keep the proficiency caps as installed, but repair the display text if this
+// kit is reinstalled into BG2EE.
+ACTION_IF GAME_IS ~bg2ee~ BEGIN
+  COPY_EXISTING ~WEAPPROF.2DA~ ~override~
+    REPLACE_TEXTUALLY ~^\(BASTARDSWORD[ %TAB%]+89\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31113 34146\2~
+    REPLACE_TEXTUALLY ~^\(LONGSWORD[ %TAB%]+90\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31114 34147\2~
+    REPLACE_TEXTUALLY ~^\(SHORTSWORD[ %TAB%]+91\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31115 34148\2~
+    REPLACE_TEXTUALLY ~^\(AXE[ %TAB%]+92\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31116 34149\2~
+    REPLACE_TEXTUALLY ~^\(TWOHANDEDSWORD[ %TAB%]+93\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31117 34150\2~
+    REPLACE_TEXTUALLY ~^\(KATANA[ %TAB%]+94\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31118 34151\2~
+    REPLACE_TEXTUALLY ~^\(SCIMITARWAKISASHININJATO[ %TAB%]+95\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31119 34152\2~
+    REPLACE_TEXTUALLY ~^\(DAGGER[ %TAB%]+96\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31120 34153\2~
+    REPLACE_TEXTUALLY ~^\(WARHAMMER[ %TAB%]+97\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31121 34156\2~
+    REPLACE_TEXTUALLY ~^\(CLUB[ %TAB%]+115\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 35445 35442\2~
+    REPLACE_TEXTUALLY ~^\(SPEAR[ %TAB%]+98\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31122 34157\2~
+    REPLACE_TEXTUALLY ~^\(HALBERD[ %TAB%]+99\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31123 34158\2~
+    REPLACE_TEXTUALLY ~^\(FLAILMORNINGSTAR[ %TAB%]+100\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31124 34159\2~
+    REPLACE_TEXTUALLY ~^\(MACE[ %TAB%]+101\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31125 34160\2~
+    REPLACE_TEXTUALLY ~^\(QUARTERSTAFF[ %TAB%]+102\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31126 34161\2~
+    REPLACE_TEXTUALLY ~^\(CROSSBOW[ %TAB%]+103\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31127 34162\2~
+    REPLACE_TEXTUALLY ~^\(LONGBOW[ %TAB%]+104\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31128 34163\2~
+    REPLACE_TEXTUALLY ~^\(SHORTBOW[ %TAB%]+105\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31129 34164\2~
+    REPLACE_TEXTUALLY ~^\(DART[ %TAB%]+106\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31130 34165\2~
+    REPLACE_TEXTUALLY ~^\(SLING[ %TAB%]+107\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31131 34166\2~
+    REPLACE_TEXTUALLY ~^\(2HANDED[ %TAB%]+111\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31135 34171\2~
+    REPLACE_TEXTUALLY ~^\(SWORDANDSHIELD[ %TAB%]+112\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31136 34173\2~
+    REPLACE_TEXTUALLY ~^\(SINGLEWEAPON[ %TAB%]+113\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31137 34174\2~
+    REPLACE_TEXTUALLY ~^\(2WEAPON[ %TAB%]+114\)[ %TAB%]+[0-9]+[ %TAB%]+[0-9]+\([ %TAB%].*\)$~ ~\1 31138 34176\2~
+  BUT_ONLY
+END

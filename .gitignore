@@ -1,0 +1,31 @@
+# WeiDU install artifacts
+*.DEBUG
+*.debug
+WeiDU.log
+setup-*
+!setup-*.tp2
+
+# Game install artifacts
+override/
+lang/
+movies/
+music/
+scripts/
+sounds/
+characters/
+save/
+chitin.key
+dialog.tlk
+dialogF.tlk
+
+# Mod install state
+bhsorcadin/backup/
+bhsorcadin/manual-backups/
+
+# Local OS/editor noise
+.DS_Store
+Thumbs.db
+*~
+*.swp
+__pycache__/
+*.pyc
