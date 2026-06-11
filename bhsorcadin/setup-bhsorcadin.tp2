@@ -81,11 +81,12 @@ END
 ACTION_PHP_EACH bhs_arcane_innates AS source => innate BEGIN
   COPY_EXISTING ~%source%.SPL~ ~override/%innate%.SPL~
     WRITE_SHORT 0x1c 4
-    WRITE_LONG 0x34 0
+    WRITE_LONG 0x34 1
     READ_LONG 0x64 bhs_ext_off
     READ_SHORT 0x68 bhs_ext_count
     FOR (bhs_i = 0; bhs_i < bhs_ext_count; ++bhs_i) BEGIN
       WRITE_SHORT (bhs_ext_off + (bhs_i * 0x28) + 0x02) 4
+      WRITE_SHORT (bhs_ext_off + (bhs_i * 0x28) + 0x12) 1
     END
   BUT_ONLY
 END
